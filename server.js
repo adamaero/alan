@@ -1,6 +1,6 @@
 
-var ChatBot = require('./chatBot');
-var BridgeServer = require('./bridgeServer');
+var ChatBot = require('./server/chatBot');
+var BridgeServer = require('./server/bridgeServer');
 
 
 var chatBot = ChatBot.create();
