@@ -5,6 +5,8 @@
 
  function makeHumanTypist() {
 
+   console.log('HumanTypist - creating new typist');
+
    const typeIntervalMs = 100;
 
    var active = false;
@@ -53,7 +55,7 @@
 
    function workOnChar(char) {
      typeContent(char);
-     setTimeout(work, Math.random()*typeIntervalMs*2);
+     setTimeout(work, Math.random() * typeIntervalMs * 2);
    }
 
    function typeMessage(message) {
@@ -88,6 +90,8 @@
 
 function createOmegleChatAgent() {
 
+  console.log('OmegleChatAgent - creating new agent');
+
   var domPollingIntervalId;
   var domPollingIntervalMs = 1000;
 
@@ -97,11 +101,8 @@ function createOmegleChatAgent() {
 
   function startAgent() {
     console.log('OmegleChatAgent - starting agent');
-    numberOfMessages = 0;
-    domPollingIntervalId = setInterval(function() {
-      checkNewMessages();
-      checkConversationEnded();
-    }, domPollingIntervalMs);
+    lastNumberOfMessages = 0;
+    domPollingIntervalId = setInterval(refresh, domPollingIntervalMs);
     console.log('OmegleChatAgent - agent started');
   }
 
@@ -114,12 +115,12 @@ function createOmegleChatAgent() {
   function startConversation() {
     console.log('OmegleChatAgent - starting conversation');
     getStartButton().click();
-    startAgent();
   }
 
   function endConversation() {
     console.log('OmegleChatAgent - ending conversation');
-    console.log('OmegleChatAgent - NOTICE : unimplemented');
+    getEndButton().click();
+    getEndButton().click();
   }
 
   function write(message) {
@@ -158,6 +159,10 @@ function createOmegleChatAgent() {
     return btn;
   }
 
+  function getEndButton() {
+    return document.querySelector('.disconnectbtn');
+  }
+
   function writeInChatBox(content) {
     getChatBox().value += content;
   }
@@ -180,34 +185,56 @@ function createOmegleChatAgent() {
    * Internal logic
    */
 
-  var numberOfMessages = 0;
+  function refresh() {
+    console.log('OmegleChatAgent - refreshing');
+    var conversationWasActive = conversationIsActive;
+    checkConversationStatus();
+    if (conversationIsActive && !conversationWasActive) {
+      onConversationStarted();
+    } else if (!conversationIsActive && conversationWasActive) {
+      onConversationEnded();
+    }
+    if (conversationIsActive) {
+      checkNewMessages();
+    }
+  }
+
+  var conversationIsActive = false;
+
+  function checkConversationStatus() {
+    console.log('OmegleChatAgent - checking conversation status');
+    if (getStartButton()) {
+      conversationIsActive = false;
+    } else {
+      conversationIsActive = true;
+    }
+  }
+
+  function onConversationStarted() {
+    console.log('OmegleChatAgent - conversation started');
+    omegleChatAgent.onConversationStarted();
+  }
+
+  function onConversationEnded() {
+    console.log('OmegleChatAgent - conversation ended');
+    omegleChatAgent.onConversationEnded();
+  }
+
+  var lastNumberOfMessages = 0;
 
   function checkNewMessages() {
     console.log('OmegleChatAgent - checking messages');
     var nb = getNumberOfMessages();
-    if (nb > numberOfMessages) {
+    if (nb > lastNumberOfMessages) {
       var message = getLastMessage();
       onNewMessage(message);
     }
-    numberOfMessages = nb;
-  }
-
-  function checkConversationEnded() {
-    console.log('OmegleChatAgent - checking end of conversation');
-    if (getStartButton()) {
-      onConversationEnded();
-    }
+    lastNumberOfMessages = nb;
   }
 
   function onNewMessage(message) {
     console.log('OmegleChatAgent - new message : ' + message);
     omegleChatAgent.onMessage(message);
-  }
-
-  function onConversationEnded() {
-    console.log('OmegleChatAgent - conversation ended');
-    omegleChatAgent.stopAgent();
-    omegleChatAgent.onConversationEnded();
   }
 
   var omegleChatAgent = {
@@ -253,58 +280,91 @@ function createBridgeClient() {
 
   var ws;
 
+  /*
+   * Commands
+   */
+
   function start() {
-
     console.log('BridgeClient - starting');
-
     initWebSocket();
   }
 
-  function initWebSocket() {
-
-    console.log('BridgeClient - WebSocket - Connecting to ' + url + ' with protocol ' + proto);
-    ws = new WebSocket(url, proto);
-
-    ws.onerror = function(err) {
-      console.log('BridgeClient - WebSocket - Error :');
-      console.error(err);
-    }
-
-    ws.onopen = function() {
-      console.log('BridgeClient - WebSocket - Open');
-      initChatAgent();
-    }
-
-    ws.onmessage = function(msg) {
-      console.log('BridgeClient - WebSocket - Message : ' + msg.data);
-      onRemoteCommand(JSON.parse(msg.data));
-    }
-
-    ws.onclose = function() {
-      console.log('BridgeClient - WebSocket - Closed');
+  function stop() {
+    console.log('BridgeClient - stoping');
+    if (ws.readyState === WebSocket.OPEN) {
+      console.log('BridgeClient - WebSocket - Closing');
+      ws.close();
+    } else {
+      onStopped();
     }
   }
 
+  /*
+   * Internals
+   */
+
+  function initWebSocket() {
+    console.log('BridgeClient - WebSocket - Connecting to ' + url + ' with protocol ' + proto);
+    ws = new WebSocket(url, proto);
+    ws.onerror = function(err) {
+      console.log('BridgeClient - WebSocket - Error :');
+      console.error(err);
+      onError(err);
+    }
+    ws.onopen = function() {
+      console.log('BridgeClient - WebSocket - Open');
+      onOpen();
+    }
+    ws.onclose = function() {
+      console.log('BridgeClient - WebSocket - Closed');
+      onClose();
+    }
+    ws.onmessage = function(msg) {
+      console.log('BridgeClient - WebSocket - Message : ' + msg.data);
+      onMessage(msg.data);
+    }
+  }
+
+  function onError(err) {
+    bridgeClient.onError(err);
+    stop();
+  }
+
+  function onOpen() {
+    initChatAgent();
+    bridgeClient.onStarted();
+    console.log('BridgeClient - started');
+  }
+
+  function onClose() {
+    stop();
+  }
+
+  function onStopped() {
+    bridgeClient.onStopped();
+    console.log('BridgeClient - stopped');
+  }
+
+  function onMessage(message) {
+    onCommand(JSON.parse(message));
+  }
+
   function initChatAgent() {
-
     console.log('BridgeClient - configuring chat agent');
-
     bridgeClient.chatAgent.onConversationStarted = function() {
-      onChatAgentCommand({
+      sendCommand({
         kind: 'event',
         type: 'conversationStarted',
       });
     };
-
     bridgeClient.chatAgent.onConversationEnded = function() {
-      onChatAgentCommand({
+      sendCommand({
         kind: 'event',
         type: 'conversationEnded',
       });
     };
-
     bridgeClient.chatAgent.onMessage = function(message) {
-      onChatAgentCommand({
+      sendCommand({
         kind: 'event',
         type: 'message',
         data: message,
@@ -312,7 +372,7 @@ function createBridgeClient() {
     };
   }
 
-  function onRemoteCommand(cmd) {
+  function onCommand(cmd) {
     if (cmd.kind === 'cmd') {
       if (cmd.type === 'startConversation') {
         bridgeClient.chatAgent.startConversation();
@@ -326,16 +386,26 @@ function createBridgeClient() {
     }
   }
 
-  function onChatAgentCommand(cmd) {
+  function sendCommand(cmd) {
     cmd = JSON.stringify(cmd);
     console.log('BridgeClient - sending chat agent command : ' + cmd);
-    ws.send(cmd);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(cmd);
+    } else {
+      console.log('BridgeClient - WebSocket - ERROR: socket is not open');
+    }
   }
 
   var bridgeClient = {
 
     start: start,
+    stop: stop,
+
     chatAgent: undefined,
+
+    onStarted: function(){},
+    onStopped: function(){},
+    onError: function(){},
 
   };
   return bridgeClient;
@@ -351,8 +421,13 @@ function createBridgeClient() {
 
 var agent = createOmegleChatAgent();
 agent.setTypist(makeHumanTypist());
-agent.startAgent();
 
 var bridgeClient = createBridgeClient();
 bridgeClient.chatAgent = agent;
+bridgeClient.onStarted = function(err) {
+  agent.startAgent();
+};
+bridgeClient.onStopped = function(err) {
+  agent.stopAgent();
+};
 bridgeClient.start();
