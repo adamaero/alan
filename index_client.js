@@ -3,39 +3,80 @@
  * Typist
  */
 
-function makeHumanTypist() {
+ function makeHumanTypist() {
 
-  const typeInterval = 100;
+   const typeIntervalMs = 100;
 
-  function typeMessage(msg) {
-    for(var i=0 ; i<msg.length ; i++) {
-      (function (i) {
-        setTimeout(function() {
-          type (msg[i]);
-          if (i === msg.length-1) {
-            commit();
-          }
-        }, typeInterval * i);
-      }) (i);
-    }
-  }
+   var active = false;
+   var messageQueue = [];
+   var currentMessage = undefined;
 
-  function type(content) {
-    typist.onType(content);
-  }
+   function resumeWork() {
+     if (!active) {
+       startWork();
+     }
+   }
 
-  function commit() {
-    typist.onCommit();
-  }
+   function startWork() {
+     active = true;
+     work();
+   }
 
-  var typist = {
-    type: typeMessage,
-    onType : function(){},
-    onCommit: function(){},
-  }
+   function stopWork() {
+     active = false;
+   }
 
-  return typist;
-}
+   function work() {
+     if (currentMessage === undefined) {
+       if (messageQueue.length > 0) {
+         currentMessage = messageQueue.shift();
+       }
+     }
+     if (currentMessage !== undefined) {
+       workOnCurrentMessage();
+     } else {
+       stopWork();
+     }
+   }
+
+   function workOnCurrentMessage() {
+     if (currentMessage.length === 0) {
+       commit();
+       currentMessage = undefined;
+       work();
+       return;
+     }
+     var char = currentMessage[0];
+     currentMessage = currentMessage.substr(1);
+     workOnChar(char);
+   }
+
+   function workOnChar(char) {
+     typeContent(char);
+     setTimeout(work, Math.random()*typeIntervalMs*2);
+   }
+
+   function typeMessage(message) {
+     messageQueue.push(message);
+     resumeWork();
+   }
+
+   function typeContent(content) {
+     typist.onType(content);
+   }
+
+   function commit() {
+     typist.onCommit();
+   }
+
+   var typist = {
+     type: typeMessage,
+     onType : function(){},
+     onCommit: function(){},
+   }
+
+   return typist;
+ }
 
 
 
