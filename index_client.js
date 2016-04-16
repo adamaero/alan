@@ -99,33 +99,103 @@ function createOmegleChatAgent() {
    * Commands
    */
 
-  function startAgent() {
-    console.log('OmegleChatAgent - starting agent');
+  function start() {
+    console.log('OmegleChatAgent - requested to start');
+    addCommand({
+      type: 'start',
+    });
+  }
+  function cmdStart() {
+    console.log('OmegleChatAgent - starting');
     lastNumberOfMessages = 0;
     domPollingIntervalId = setInterval(refresh, domPollingIntervalMs);
-    console.log('OmegleChatAgent - agent started');
+    console.log('OmegleChatAgent - started');
+    processCommands();
   }
 
-  function stopAgent() {
-    console.log('OmegleChatAgent - stopping agent');
+  function stop() {
+    console.log('OmegleChatAgent - requested to stop');
+    addCommand({
+      type: 'stop',
+    });
+  }
+  function cmdStop() {
+    console.log('OmegleChatAgent - stopping');
     clearInterval(domPollingIntervalId);
-    console.log('OmegleChatAgent - agent stopped');
+    console.log('OmegleChatAgent - stopped');
+    processCommands();
   }
 
   function startConversation() {
+    console.log('OmegleChatAgent - requested to start conversation');
+    addCommand({
+      type: 'startConversation',
+    });
+  }
+  function cmdStartConversation() {
     console.log('OmegleChatAgent - starting conversation');
     getStartButton().click();
   }
 
   function endConversation() {
+    console.log('OmegleChatAgent - requested to end conversation');
+    addCommand({
+      type: 'endConversation',
+    });
+  }
+  function cmdEndConversation() {
     console.log('OmegleChatAgent - ending conversation');
     getEndButton().click();
     getEndButton().click();
   }
 
   function write(message) {
+    console.log('OmegleChatAgent - requested to write : ' + message);
+    addCommand({
+      type: 'write',
+      data: message,
+    });
+  }
+  function cmdWrite(message) {
     console.log('OmegleChatAgent - writing : ' + message);
     omegleChatAgent.typist.type(message);
+  }
+
+  var commandQueue = [];
+  var active = false;
+
+  function addCommand(cmd) {
+    commandQueue.push(cmd);
+    if (!active) {
+      processCommands();
+    }
+  }
+
+  function processCommands() {
+    active = false;
+    if (commandQueue.length > 0) {
+      var cmd = commandQueue.shift();
+      if (cmd.type === 'start') {
+        active = true;
+        cmdStart();
+      }
+      if (cmd.type === 'stop') {
+        active = true;
+        cmdStop();
+      }
+      if (cmd.type === 'startConversation') {
+        active = true;
+        cmdStartConversation();
+      }
+      if (cmd.type === 'endConversation') {
+        active = true;
+        cmdEndConversation();
+      }
+      if (cmd.type === 'write') {
+        active = true;
+        cmdWrite(cmd.data);
+      }
+    }
   }
 
   function setTypist(typist) {
@@ -136,6 +206,7 @@ function createOmegleChatAgent() {
     }
     typist.onCommit = function() {
       sendMessageInChatBox();
+      processCommands();
     }
   }
 
@@ -213,11 +284,13 @@ function createOmegleChatAgent() {
   function onConversationStarted() {
     console.log('OmegleChatAgent - conversation started');
     omegleChatAgent.onConversationStarted();
+    processCommands();
   }
 
   function onConversationEnded() {
     console.log('OmegleChatAgent - conversation ended');
     omegleChatAgent.onConversationEnded();
+    processCommands();
   }
 
   var lastNumberOfMessages = 0;
@@ -240,9 +313,9 @@ function createOmegleChatAgent() {
   var omegleChatAgent = {
 
     // start polling
-    startAgent: startAgent,
+    start: start,
     // stop polling
-    stopAgent: stopAgent,
+    stop: stop,
     // start conversation
     startConversation: startConversation,
     // end conversation
@@ -425,9 +498,9 @@ agent.setTypist(makeHumanTypist());
 var bridgeClient = createBridgeClient();
 bridgeClient.chatAgent = agent;
 bridgeClient.onStarted = function(err) {
-  agent.startAgent();
+  agent.start();
 };
 bridgeClient.onStopped = function(err) {
-  agent.stopAgent();
+  agent.stop();
 };
 bridgeClient.start();
