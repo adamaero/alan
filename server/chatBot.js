@@ -1,4 +1,8 @@
 
+var ngram = require('simple-ngram-markov');
+var fs = require('fs');
+
+
 module.exports = {
 
   create: function() {
@@ -9,19 +13,27 @@ module.exports = {
      * Commands
      */
 
+    var started = false;
+
     function start() {
       console.log('ChatBot - starting');
+      initNgramModel();
       startConversation();
+      started = true;
       console.log('ChatBot - started');
     }
 
     function stop() {
       console.log('ChatBot - stopping');
+      saveNgramModel();
+      started = false;
       console.log('ChatBot - stopped');
     }
 
     function restart() {
-      stop();
+      if (started) {
+        stop();
+      }
       start();
     }
 
@@ -29,7 +41,10 @@ module.exports = {
      * Events
      */
 
+    var messagesSinceConversationStarted = 0;
+
     function conversationStarted() {
+      messagesSinceConversationStarted = 0;
       console.log('ChatBot - conversationStarted');
       write('Bonjour');
     }
@@ -41,8 +56,94 @@ module.exports = {
 
     function message(message) {
       console.log('ChatBot - message : ' + message);
-      write(message);
-      endConversation();
+
+      addSentenceToModel(message);
+
+      messagesSinceConversationStarted += 1;
+      console.log(messagesSinceConversationStarted);
+
+      if(messagesSinceConversationStarted % 3 === 2) {
+        write('Je suis un robot qui apprend, parler sil vous plait');
+      } else {
+        var sentence = '';
+        while (!sentence.trim()) {
+          sentence = getSentence();
+        }
+        write(sentence);
+      }
+    }
+
+    /*
+     * N-grams
+     */
+
+    const dbFilePath = 'db.txt';
+
+    var ngramModel;
+    var sentences = [];
+
+    function initNgramModel() {
+      loadSentences();
+      recreateNgramModel();
+    }
+
+    function saveNgramModel() {
+      writeSentences();
+    }
+
+    function loadSentences() {
+      var content = fs.readFileSync(dbFilePath, {encoding: 'utf8'});
+      sentences = content.split('\n');
+    }
+
+    function writeSentences() {
+      fs.writeFile(dbFilePath, sentences.join('\n'));
+    }
+
+    function recreateNgramModel() {
+      var length = getMeanSentenceSize();
+      console.log('ChatBot - ngram - recreating model with length: ' + length);
+      ngramModel = ngram.createModel({
+        length: length,
+      });
+      for(var i in sentences) {
+        ngram.addSentenceToModel(ngramModel, sentences[i]);
+      }
+    }
+
+    function getSentenceSize(sentence) {
+      return sentence.split(' ').length;
+    }
+
+    function getMeanSentenceSize() {
+      var size = 0;
+      for (var i in sentences) {
+        size += getSentenceSize(sentences[i]);
+      }
+      return Math.floor(size/sentences.length);
+    }
+
+    function getMaxSentenceSize() {
+      var max = 0;
+      for (var i in sentences) {
+        var size = getSentenceSize(sentences[i]);
+        if (size > max) {
+          max = size;
+        }
+      }
+      return max;
+    }
+
+    function addSentenceToModel(sentence) {
+      sentences.push(sentence);
+      recreateNgramModel();
+    }
+
+    function getSentence() {
+      var mean = getMeanSentenceSize();
+      var max = getMaxSentenceSize();
+      var size = Math.random() * max + mean;
+      return ngram.generateSentence(ngramModel, size);
     }
 
     /*
